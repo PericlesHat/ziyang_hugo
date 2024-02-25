@@ -2,6 +2,7 @@
 body {
     font-family: 'Inter', sans-serif;
     color: #071013;
+    min-width: 1px; 
 }
 
 a {
@@ -15,7 +16,6 @@ a:hover {
 
 h2 code {
   font-family: Consolas,"courier new";
-  /* background-color: #f1f1f1; */
   background-color:  #0c3591;;
   color: white;
   padding: 2px;
@@ -45,6 +45,7 @@ h2 code {
 
 .w-100 {
     margin: auto;
+    min-width: 1px;
 }
 
 .main_color  {
@@ -137,6 +138,7 @@ h2 code {
 
 .publications .publication {
     margin-top: 1.5%;
+    
 }
 
 .publication .section-1 .publication-date {
@@ -163,6 +165,7 @@ h2 code {
 
 .publication .section-3 a{
     padding: .15%;
+    background-color: #0c3591 !important;
 }
 
 .publication .section-3 a:hover {
@@ -171,7 +174,7 @@ h2 code {
     transition-timing-function: ease-in-out;
 
     border-radius: 50%;
-    background-color: #d64933;
+    background-color: #0c3591 !important;
     color: white;
 }
 
@@ -198,7 +201,7 @@ h2 code {
     transition-timing-function: ease-in-out;
 
     border-radius: 50%;
-    background-color: #d64933;
+    background-color: #0c3591;
     color: white;
 }
 
