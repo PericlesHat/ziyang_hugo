@@ -1597,7 +1597,7 @@
     <div class="col w-100">
         <div class="row w-100">
             <div class="col w-100">
-                <h3 class="row w-100 section-title main_color"> Research Highlight </h3>
+                <h3 class="row w-100 section-title main_color"> Research Highlights </h3>
             </div>
         </div>
 
@@ -1672,10 +1672,23 @@
 
                     <div class="w-100">
                         <p class="small text-muted mb-2">*Equal contributions and corresponding authors.</p>
-                        <p>We introduce Med-BNA (Medical Best Next Action), a framework for evaluating clinical language models through interactive urgent care simulations. Using 21-day revisit trajectories, physicians reconstruct reference care plans through two rounds of annotation, clinical concept alignment, and importance weighting of clinical actions. A Patient Agent provides subjective history, while a separate Hospital Environment Agent releases examination findings and test results only when requested. This information asymmetry requires models to actively gather evidence, select investigations, and revise management decisions over multiple turns.</p>
-                        <p>Evaluation spans 11 frontier and open-weight models on 35 core encounters and an expanded set of 137 physician-validated scenarios. The best-performing model achieves 55.0% weighted F1 on the core benchmark and recovers 69.4% of expert-identified critical actions omitted by the historical care team. Analyses identify premature encounter closure and gaps in patient counseling and disposition planning as persistent failure modes, highlighting the need to evaluate information gathering and safety-oriented communication alongside diagnostic reasoning.</p>
-                        <p class="text-muted mb-2">The manuscript is not publicly available.</p>
+                        <p>We study whether language models can improve initial care by identifying clinical actions missed in historical encounters. Med-BNA (Medical Best Next Action) combines clinician-reconstructed care pathways with a multi-agent simulation that separates patient history from hospital findings, requiring models to gather information and make sequential clinical decisions. The study suggests that models have the potential to identify gaps in care, while reliable clinical assistance requires stronger information gathering, patient counseling, and disposition planning.</p>
                         <p class="main_color">More details will be shared when available.</p>
+                    </div>
+                </div>
+
+                <div class="publication row  w-100">
+                    <div class="section-1 w-100">
+                        <span>Diabetes and Subtyping Techniques</span>
+                    </div>
+
+                    <div class="section-2 text-muted w-100">
+                        <span style="font-weight: 700;">Ziyang Zhang</span>, Carl Yang et al.
+                    </div>
+
+                    <div class="w-100">
+                        <p>We study disease heterogeneity through graph and hypergraph representations of electronic health records, with a particular focus on type 2 diabetes. This research line connects <i>TACCO</i>, phenotype-genotype co-learning (MedInfo 2025), joint learning of complication risks and subtypes, and recent work on longitudinal trajectory subtyping. Our methods model relationships among clinical concepts, patient visits, and disease trajectories, and validate the resulting subtypes using phenotypes, genetics, and clinical outcomes. Together, these studies aim to connect subtype discovery with biological interpretation and differences in disease progression.</p>
+                        <p>A general-purpose software package for EHR hypergraph modeling, outcome prediction, and patient subtyping is available in <a href="https://github.com/PericlesHat/ehr-hypergraph" target="_blank" rel="noopener noreferrer">ehr-hypergraph</a>.</p>
                     </div>
                 </div>
             </div>
