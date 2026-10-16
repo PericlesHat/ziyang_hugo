@@ -4,6 +4,63 @@
 	<meta name="generator" content="Hugo 0.122.0">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#ffffff">
+
+    <script id="theme-init">
+        (function () {
+            var storageKey = 'ziyang-theme';
+            var systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+            var preference = null;
+
+            try {
+                var saved = localStorage.getItem(storageKey);
+                if (saved === 'light' || saved === 'dark') preference = saved;
+            } catch (error) {
+                // System preference still works when browser storage is unavailable.
+            }
+
+            function applyTheme(theme) {
+                document.documentElement.dataset.theme = theme;
+                document.querySelector('meta[name="theme-color"]').content =
+                    theme === 'dark' ? '#16181c' : '#ffffff';
+
+                var toggle = document.getElementById('theme-toggle');
+                if (toggle) {
+                    toggle.setAttribute('aria-checked', String(theme === 'dark'));
+                    toggle.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+                }
+            }
+
+            function followSystem() {
+                if (!preference) applyTheme(systemTheme.matches ? 'dark' : 'light');
+            }
+
+            applyTheme(preference || (systemTheme.matches ? 'dark' : 'light'));
+            systemTheme.addEventListener('change', followSystem);
+
+            window.addEventListener('storage', function (event) {
+                if (event.key !== storageKey && event.key !== null) return;
+                preference = event.newValue === 'light' || event.newValue === 'dark'
+                    ? event.newValue : null;
+                applyTheme(preference || (systemTheme.matches ? 'dark' : 'light'));
+            });
+
+            document.addEventListener('DOMContentLoaded', function () {
+                var toggle = document.getElementById('theme-toggle');
+                applyTheme(document.documentElement.dataset.theme);
+                toggle.addEventListener('click', function () {
+                    preference = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+                    applyTheme(preference);
+                    try {
+                        localStorage.setItem(storageKey, preference);
+                    } catch (error) {
+                        // Keep the manual choice for this visit if it cannot be saved.
+                    }
+                });
+            });
+        })();
+    </script>
 
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
         integrity="sha256-4+XzXVhsDmqanXGHaHvgh1gMQKX40OUvDEBTu8JcmNs=" crossorigin="anonymous"></script>
@@ -15,6 +72,103 @@
         href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo&family=Noto+Serif+JP&family=Cormorant+Garamond&family=Libre+Baskerville&family=Source+Serif+Pro&family=Crimson+Text&family=Inter&family=Crimson+Pro&family=Literata&family=Ubuntu+Mono&family=Inter&family=Roboto">
     <link rel="stylesheet" type="text/css" href="/css/style.css">
 
+    <style id="theme-styles">
+        :root {
+            color-scheme: light;
+            --page-background: #ffffff;
+            --page-text: #071013;
+            --page-muted: #6c757d;
+            --page-accent: #0c3591;
+            --page-link-hover: #050517;
+            --theme-border: #d9e0e7;
+            --theme-hover: #eef3f9;
+        }
+
+        :root[data-theme="dark"] {
+            color-scheme: dark;
+            --page-background: #16181c;
+            --page-text: #e4e7eb;
+            --page-muted: #a9b2bc;
+            --page-accent: #a3c5ff;
+            --page-link-hover: #d1e2ff;
+            --theme-border: #454c55;
+            --theme-hover: #262c34;
+        }
+
+        html, body {
+            background-color: var(--page-background);
+            color: var(--page-text);
+        }
+
+        a, .main_color {
+            color: var(--page-accent);
+        }
+
+        a:hover {
+            color: var(--page-link-hover);
+        }
+
+        .text-muted {
+            color: var(--page-muted) !important;
+        }
+
+        .secondary_color, .email_color, .news_icon i {
+            color: var(--page-text);
+        }
+
+        .publication .section-3 a:hover {
+            background-color: var(--page-accent);
+            color: var(--page-background);
+        }
+
+        :root[data-theme="dark"] img[alt="Emory University logo"] {
+            background-color: #ffffff;
+            border-radius: 2px;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            z-index: 10;
+            display: grid;
+            place-items: center;
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            border: 1px solid var(--theme-border);
+            border-radius: 50%;
+            background-color: var(--page-background);
+            color: var(--page-accent);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .theme-toggle:hover {
+            background-color: var(--theme-hover);
+            border-color: var(--page-accent);
+        }
+
+        .theme-toggle:focus-visible {
+            outline: 2px solid var(--page-accent);
+            outline-offset: 3px;
+        }
+
+        .theme-toggle span {
+            display: flex;
+        }
+
+        .theme-toggle svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        :root[data-theme="dark"] .theme-toggle__moon,
+        :root:not([data-theme="dark"]) .theme-toggle__sun {
+            display: none;
+        }
+    </style>
+
     
     
 
@@ -24,6 +178,11 @@
     
 
 </head><body class="container d-flex flex-column min-vh-100">
+
+<button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-label="Dark mode" aria-checked="false" title="Switch to dark mode">
+    <span class="theme-toggle__moon" aria-hidden="true"><i data-feather="moon"></i></span>
+    <span class="theme-toggle__sun" aria-hidden="true"><i data-feather="sun"></i></span>
+</button>
 
 
 
