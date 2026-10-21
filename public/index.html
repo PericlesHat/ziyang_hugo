@@ -168,6 +168,52 @@
         }
     </style>
 
+    <style id="ocean-styles">
+        #ascii-ocean {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        #ascii-ocean[hidden], #ocean-toggle[hidden] {
+            display: none !important;
+        }
+
+        body > .row, body > footer {
+            position: relative;
+            z-index: 1;
+        }
+
+        #ocean-toggle {
+            right: 72px;
+        }
+
+        #ocean-toggle[aria-checked="true"] .ocean-show,
+        #ocean-toggle[aria-checked="false"] .ocean-hide {
+            display: none;
+        }
+
+        @media (min-width: 1440px) {
+            body.container {
+                max-width: 1040px;
+            }
+
+            .theme-toggle {
+                position: fixed;
+            }
+        }
+
+        @media (max-width: 1439.98px) {
+            #ascii-ocean, #ocean-toggle {
+                display: none !important;
+            }
+        }
+    </style>
+
     
     
 
@@ -178,6 +224,11 @@
 
 </head><body class="container d-flex flex-column min-vh-100">
 
+<canvas id="ascii-ocean" aria-hidden="true" hidden></canvas>
+<button id="ocean-toggle" class="theme-toggle" type="button" role="switch" aria-label="ASCII animation" aria-checked="true" title="Hide ASCII animation" hidden>
+    <span class="ocean-hide" aria-hidden="true"><i data-feather="eye"></i></span>
+    <span class="ocean-show" aria-hidden="true"><i data-feather="eye-off"></i></span>
+</button>
 <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-label="Dark mode" aria-checked="false" title="Switch to dark mode">
     <span class="theme-toggle__moon" aria-hidden="true"><i data-feather="moon"></i></span>
     <span class="theme-toggle__sun" aria-hidden="true"><i data-feather="sun"></i></span>
@@ -1860,7 +1911,355 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.28.0/feather.min.js"></script>
 <script>
     feather.replace()
-</script></body>
+</script>
+<script id="ascii-ocean-script">
+    (function () {
+        'use strict';
+
+        // Classic silhouette, fin proportions, ASCII shading and articulated spine adapted from
+        // stackedlol/ascii-sharks, c521e24a787e6d4cc460d4cf2b9815f25e4fe453:
+        // https://github.com/stackedlol/ascii-sharks (src/renderer.ts and src/world.ts).
+        // This static-page adaptation adds vertical patrols, content avoidance and transparent masks.
+        const canvas = document.getElementById('ascii-ocean');
+        const toggle = document.getElementById('ocean-toggle');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const wide = window.matchMedia('(min-width: 1440px)');
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const storageKey = 'ziyang-ascii-ocean';
+        const padding = 24;
+        const nodeCount = 20;
+        const frameInterval = 1000 / 30;
+        const cellWidth = 6;
+        const cellHeight = 8;
+        const ramp = ':;t%SX8#@';
+        const protectedElements = Array.from(document.querySelectorAll(
+            '#profile_picture, #full_name, .affiliations, .socials, .introduction p, ' +
+            '#education-experience > div, .news, .publication, .section-title, footer'
+        ));
+        let enabled = true;
+        let width = 0;
+        let height = 0;
+        let dpr = 1;
+        let raf = 0;
+        let lastFrame = 0;
+        let time = 0;
+        let layoutDirty = true;
+        let redraw = true;
+        let documentRects = [];
+        let fixedRects = [];
+        let obstacles = [];
+        let sharks = [];
+
+        try {
+            enabled = localStorage.getItem(storageKey) !== 'off';
+        } catch (error) {
+            // A storage restriction does not prevent toggling during this visit.
+        }
+
+        const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+        const smoothstep = (low, high, value) => {
+            const t = clamp((value - low) / (high - low), 0, 1);
+            return t * t * (3 - 2 * t);
+        };
+        const active = () => wide.matches && enabled && !document.hidden;
+
+        function expandedRect(element, fixed) {
+            const rect = element.getBoundingClientRect();
+            if (!rect.width || !rect.height) return null;
+            return {
+                left: rect.left + (fixed ? 0 : window.scrollX) - padding,
+                top: rect.top + (fixed ? 0 : window.scrollY) - padding,
+                right: rect.right + (fixed ? 0 : window.scrollX) + padding,
+                bottom: rect.bottom + (fixed ? 0 : window.scrollY) + padding
+            };
+        }
+
+        function makeShark(side, lane, index) {
+            const length = clamp((lane.right - lane.left) * 0.95, 160, 240);
+            const direction = index ? -1 : 1;
+            const heading = direction * Math.PI / 2;
+            const x = (lane.left + lane.right) / 2;
+            const y = height * (index ? 0.72 : 0.30);
+            return {
+                side, lane, length, direction, heading,
+                phase: index * Math.PI,
+                speed: 18 + length * 0.025,
+                nodes: Array.from({ length: nodeCount }, (_, i) => ({
+                    x: x - Math.cos(heading) * length * i / (nodeCount - 1),
+                    y: y - Math.sin(heading) * length * i / (nodeCount - 1)
+                }))
+            };
+        }
+
+        function measure() {
+            const nextWidth = document.documentElement.clientWidth;
+            const nextHeight = window.innerHeight;
+            const nextDpr = Math.min(window.devicePixelRatio || 1, 2);
+            const resized = width !== nextWidth || height !== nextHeight || dpr !== nextDpr;
+            width = nextWidth;
+            height = nextHeight;
+            dpr = nextDpr;
+            if (resized) {
+                canvas.width = Math.ceil(width * dpr);
+                canvas.height = Math.ceil(height * dpr);
+            }
+            documentRects = protectedElements.map(element => expandedRect(element, false)).filter(Boolean);
+            fixedRects = [toggle, document.getElementById('theme-toggle')]
+                .map(element => expandedRect(element, true)).filter(Boolean);
+
+            const content = document.body.getBoundingClientRect();
+            const lanes = [
+                { left: 12, right: content.left - padding },
+                { left: content.right + padding, right: width - 12 }
+            ];
+            if (resized || !sharks.length) {
+                sharks = lanes.map((lane, index) => makeShark(index ? 1 : -1, lane, index));
+            } else {
+                sharks.forEach((shark, index) => { shark.lane = lanes[index]; });
+            }
+            layoutDirty = false;
+        }
+
+        function projectObstacles() {
+            const x = window.scrollX;
+            const y = window.scrollY;
+            obstacles = documentRects.map(rect => ({
+                left: rect.left - x, right: rect.right - x,
+                top: rect.top - y, bottom: rect.bottom - y
+            })).concat(fixedRects).filter(rect => rect.bottom > -300 && rect.top < height + 300);
+        }
+
+        function advance(shark, dt) {
+            const nodes = shark.nodes;
+            const head = nodes[0];
+            const length = shark.length;
+            // Reverse only after the entire body and fins have left the viewport.
+            if (shark.direction < 0 && nodes.every(node => node.y < -length * 0.35)) shark.direction = 1;
+            if (shark.direction > 0 && nodes.every(node => node.y > height + length * 0.35)) shark.direction = -1;
+
+            const center = (shark.lane.left + shark.lane.right) / 2;
+            const sway = Math.sin(time * 0.13 + shark.side) * Math.min(18, (shark.lane.right - shark.lane.left) * 0.07);
+            let dx = clamp((center + sway - head.x) / (length * 0.7), -0.7, 0.7);
+            const dy = shark.direction;
+            const lookAhead = length * 1.4;
+
+            // Probe the complete articulated body, with extra clearance at the pectoral fins.
+            // When a corner control blocks a lane, steering can briefly lead off-screen.
+            for (let i = 0; i < nodeCount; i += 3) {
+                const node = nodes[i];
+                const fraction = i / (nodeCount - 1);
+                const radius = length * (fraction < 0.6 ? 0.30 : 0.12) + 6;
+                const futureY = node.y + dy * lookAhead;
+                for (const rect of obstacles) {
+                    if (Math.max(node.y, futureY) + radius < rect.top || Math.min(node.y, futureY) - radius > rect.bottom) continue;
+                    if (node.x + radius < rect.left || node.x - radius > rect.right) continue;
+                    const exitX = shark.side < 0 ? rect.left - radius : rect.right + radius;
+                    const distance = dy < 0 ? node.y - rect.bottom : rect.top - node.y;
+                    const urgency = 1 - clamp(distance / (lookAhead + radius), 0, 1);
+                    dx += clamp((exitX - node.x) / length, -1.5, 1.5) * urgency * 0.45;
+                }
+            }
+
+            const desired = Math.atan2(dy, clamp(dx, -2, 2));
+            const difference = Math.atan2(Math.sin(desired - shark.heading), Math.cos(desired - shark.heading));
+            const maxTurn = Math.min(0.65, shark.speed / (length * 0.28)) * dt;
+            shark.heading += clamp(difference, -maxTurn, maxTurn);
+            shark.phase += dt * 1.7;
+            head.x += Math.cos(shark.heading) * shark.speed * dt;
+            head.y += Math.sin(shark.heading) * shark.speed * dt;
+
+            // Follow-the-leader spine and joint stiffness from the upstream movement model.
+            const segment = length / (nodeCount - 1);
+            let previousAngle = shark.heading + Math.PI;
+            for (let i = 1; i < nodeCount; i++) {
+                const previous = nodes[i - 1];
+                let angle = Math.atan2(nodes[i].y - previous.y, nodes[i].x - previous.x);
+                const bend = Math.atan2(Math.sin(angle - previousAngle), Math.cos(angle - previousAngle));
+                angle = previousAngle + clamp(bend, -0.16, 0.16);
+                nodes[i].x = previous.x + Math.cos(angle) * segment;
+                nodes[i].y = previous.y + Math.sin(angle) * segment;
+                previousAngle = angle;
+            }
+        }
+
+        function bodyWidth(s) {
+            if (s < 0.13) return 0.09 * Math.pow(Math.sin(s / 0.13 * Math.PI / 2), 0.95);
+            if (s < 0.30) return 0.09 + 0.016 * smoothstep(0.13, 0.30, s);
+            if (s < 0.84) return 0.019 + 0.087 * Math.pow(1 - (s - 0.30) / 0.54, 1.25);
+            const k = (s - 0.84) / 0.16;
+            return 0.019 * (1 - k) + 0.012 * Math.sin(k * Math.PI);
+        }
+
+        function inTriangle(x, y, ax, ay, bx, by, cx, cy) {
+            const a = (x - bx) * (ay - by) - (ax - bx) * (y - by);
+            const b = (x - cx) * (by - cy) - (bx - cx) * (y - cy);
+            const c = (x - ax) * (cy - ay) - (cx - ax) * (y - ay);
+            return !((a < 0 || b < 0 || c < 0) && (a > 0 || b > 0 || c > 0));
+        }
+
+        function sample(x, y, spine, length) {
+            let best = Infinity;
+            let along = 0;
+            for (let i = 0; i < nodeCount - 1; i++) {
+                const a = spine[i];
+                const b = spine[i + 1];
+                const sx = b.x - a.x;
+                const sy = b.y - a.y;
+                const u = clamp(((x - a.x) * sx + (y - a.y) * sy) / (sx * sx + sy * sy || 1), 0, 1);
+                const distance = (x - a.x - sx * u) ** 2 + (y - a.y - sy * u) ** 2;
+                if (distance < best) {
+                    best = distance;
+                    along = (i + u) / (nodeCount - 1);
+                }
+            }
+            const across = Math.sqrt(best) / length;
+            const halfWidth = bodyWidth(along);
+            if (across <= halfWidth) {
+                const edge = across / (halfWidth || 1);
+                if (along > 0.10 && along < 0.14 && edge > 0.65) return { shade: 0.85, glyph: 'o' };
+                if (along > 0.33 && along < 0.47 && edge < 0.30) return { shade: 0.85, glyph: '@' };
+                const shade = 0.70 - edge * edge * 0.43;
+                const index = Math.floor(clamp((1 - shade) * 9 + Math.sin(along * 120) * 0.5, 0, ramp.length - 1));
+                return { shade, glyph: ramp[index] };
+            }
+            // Classic swept pectoral fins, smaller pelvic fins and forked tail.
+            const pectoral = inTriangle(along, across, 0.15, 0, 0.43, 0, 0.55, 0.26) &&
+                !inTriangle(along, across, 0.43, 0, 0.4696, 0.143, 0.55, 0.26);
+            const pelvic = inTriangle(along, across, 0.57, 0, 0.65, 0, 0.69, 0.085);
+            const tail = inTriangle(along, across, 0.86, 0, 0.95, 0, 1, 0.085);
+            return pectoral || pelvic || tail ? { shade: 0.38, glyph: '%;t'[(Math.floor(along * 50)) % 3] } : null;
+        }
+
+        function drawShark(shark, dark) {
+            const length = shark.length;
+            const spine = shark.nodes.map((node, i, nodes) => {
+                const before = nodes[Math.max(0, i - 1)];
+                const after = nodes[Math.min(nodeCount - 1, i + 1)];
+                const tx = before.x - after.x;
+                const ty = before.y - after.y;
+                const norm = Math.hypot(tx, ty) || 1;
+                const s = i / (nodeCount - 1);
+                const wave = length * 0.035 * (0.1 + 0.9 * Math.pow(s, 1.8)) * Math.sin(shark.phase - s * 5.2);
+                return { x: node.x - ty / norm * wave, y: node.y + tx / norm * wave };
+            });
+            const reach = length * 0.30;
+            const left = Math.max(0, Math.floor((Math.min(...spine.map(p => p.x)) - reach) / cellWidth));
+            const right = Math.min(Math.ceil(width / cellWidth), Math.ceil((Math.max(...spine.map(p => p.x)) + reach) / cellWidth));
+            const top = Math.max(0, Math.floor((Math.min(...spine.map(p => p.y)) - reach) / cellHeight));
+            const bottom = Math.min(Math.ceil(height / cellHeight), Math.ceil((Math.max(...spine.map(p => p.y)) + reach) / cellHeight));
+            const ink = dark ? '151,178,204' : '60,86,112';
+            for (let row = top; row < bottom; row++) {
+                for (let col = left; col < right; col++) {
+                    const x = col * cellWidth;
+                    const y = row * cellHeight;
+                    const hit = sample(x + cellWidth / 2, y + cellHeight / 2, spine, length);
+                    if (!hit) continue;
+                    ctx.fillStyle = 'rgba(' + ink + ',' + (0.05 + hit.shade * 0.10) + ')';
+                    ctx.fillRect(x + 0.5, y + 0.5, cellWidth - 1, cellHeight - 1);
+                    ctx.fillStyle = 'rgba(' + ink + ',' + ((dark ? 0.20 : 0.24) + hit.shade * 0.25) + ')';
+                    ctx.fillText(hit.glyph, x + cellWidth / 2, y + cellHeight / 2);
+                }
+            }
+        }
+
+        function render() {
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, width, height);
+            ctx.font = '600 9px "Ubuntu Mono", ui-monospace, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const dark = document.documentElement.dataset.theme === 'dark';
+            sharks.forEach(shark => drawShark(shark, dark));
+
+            // Final hard mask protects text even during resize, scrolling and wide turns.
+            obstacles.forEach(rect => {
+                const left = Math.floor(rect.left * dpr) / dpr;
+                const top = Math.floor(rect.top * dpr) / dpr;
+                const right = Math.ceil(rect.right * dpr) / dpr;
+                const bottom = Math.ceil(rect.bottom * dpr) / dpr;
+                ctx.clearRect(left, top, right - left, bottom - top);
+            });
+            redraw = false;
+        }
+
+        function requestTick() {
+            if (!raf && active()) raf = window.requestAnimationFrame(tick);
+        }
+
+        function tick(now) {
+            raf = 0;
+            if (!active()) return;
+            if (layoutDirty) measure();
+            if (now - lastFrame >= frameInterval || !lastFrame) {
+                projectObstacles();
+                if (!reduced.matches) {
+                    const dt = lastFrame ? Math.min((now - lastFrame) / 1000, 0.08) : 1 / 30;
+                    time += dt;
+                    sharks.forEach(shark => advance(shark, dt));
+                }
+                render();
+                lastFrame = now;
+            }
+            if (!reduced.matches || redraw) requestTick();
+        }
+
+        function refresh(measureLayout) {
+            layoutDirty = layoutDirty || measureLayout;
+            redraw = true;
+            // Erase the old frame before moving document content can pass behind it.
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            requestTick();
+        }
+
+        function reconcile() {
+            window.cancelAnimationFrame(raf);
+            raf = 0;
+            lastFrame = 0;
+            toggle.hidden = !wide.matches;
+            toggle.setAttribute('aria-checked', String(enabled));
+            toggle.title = enabled ? 'Hide ASCII animation' : 'Show ASCII animation';
+            canvas.hidden = !wide.matches || !enabled;
+            if (!wide.matches && document.activeElement === toggle) document.getElementById('theme-toggle').focus();
+            if (active()) refresh(true);
+        }
+
+        toggle.addEventListener('click', function () {
+            enabled = !enabled;
+            try {
+                localStorage.setItem(storageKey, enabled ? 'on' : 'off');
+            } catch (error) {
+                // Preserve the current choice in memory when persistence is unavailable.
+            }
+            reconcile();
+        });
+        window.addEventListener('storage', function (event) {
+            if (event.key !== storageKey && event.key !== null) return;
+            enabled = event.newValue !== 'off';
+            reconcile();
+        });
+        wide.addEventListener('change', reconcile);
+        reduced.addEventListener('change', reconcile);
+        document.addEventListener('visibilitychange', reconcile);
+        window.addEventListener('resize', () => refresh(true));
+        window.addEventListener('scroll', () => refresh(false), { passive: true });
+        window.addEventListener('pagehide', function () {
+            window.cancelAnimationFrame(raf);
+            raf = 0;
+        });
+        window.addEventListener('pageshow', reconcile);
+        new MutationObserver(() => refresh(false)).observe(document.documentElement, {
+            attributes: true, attributeFilter: ['data-theme']
+        });
+        const resizeObserver = new ResizeObserver(() => refresh(true));
+        [document.body].concat(protectedElements).forEach(element => resizeObserver.observe(element));
+        if (document.fonts) document.fonts.ready.then(() => refresh(true));
+        document.querySelectorAll('img').forEach(image => image.addEventListener('load', () => refresh(true)));
+        reconcile();
+    })();
+</script>
+</body>
 
 </html>
 
