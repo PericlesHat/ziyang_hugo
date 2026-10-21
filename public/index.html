@@ -6,6 +6,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#ffffff">
+    <meta name="description" content="Ziyang Zhang is a Ph.D. student at Emory University researching AI for health and LLM agents. Explore his research highlights and publications.">
+    <link rel="canonical" href="https://ziyang-emory.vercel.app/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Ziyang Zhang">
+    <meta property="og:title" content="Ziyang Zhang | Emory University">
+    <meta property="og:description" content="Ziyang Zhang is a Ph.D. student at Emory University researching AI for health and LLM agents. Explore his research highlights and publications.">
+    <meta property="og:url" content="https://ziyang-emory.vercel.app/">
+    <script id="site-schema" type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "Ziyang Zhang",
+            "url": "https://ziyang-emory.vercel.app/"
+        }
+    </script>
 
     <script id="theme-init">
         (function () {
@@ -205,7 +220,7 @@
     
     
 
-    <title>Ziyang Zhang</title>
+    <title>Ziyang Zhang | Emory University</title>
 
 
     
@@ -213,7 +228,7 @@
 </head><body class="container d-flex flex-column min-vh-100">
 
 <canvas id="ascii-ocean" aria-hidden="true" hidden></canvas>
-<button id="ocean-toggle" class="theme-toggle" type="button" role="switch" aria-label="Shark animation" aria-checked="true" title="Hide shark animation" hidden>
+<button id="ocean-toggle" class="theme-toggle" type="button" role="switch" aria-label="Shark animation" aria-checked="true" title="don't like the shark?" hidden>
     <!-- Shark icon: Pictogrammers Material Design Icons, Apache-2.0.
          https://pictogrammers.com/library/mdi/icon/shark/ | https://www.apache.org/licenses/LICENSE-2.0 -->
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
@@ -1927,6 +1942,10 @@
         const cellWidth = 6;
         const cellHeight = 8;
         const ramp = ':;t%SX8#@';
+        const colors = {
+            original: { light: '60,86,112', dark: '151,178,204' },
+            pale: { light: '146,156,166', dark: '205,211,217' }
+        };
         const shapes = {
             classic: { pectoral: [0.15, 0.43, 0.55, 0.26], pelvic: [0.57, 0.65, 0.69, 0.085], caudal: 0.085, dorsal: [0.33, 0.47], eye: [0.10, 0.14], falcate: true },
             hammerhead: { pectoral: [0.17, 0.40, 0.50, 0.22], pelvic: [0.56, 0.63, 0.67, 0.075], caudal: 0.11, dorsal: [0.28, 0.44], head: [0.17, 0.035, 0.09], falcate: true },
@@ -2012,6 +2031,7 @@
             const speed = random(18, 30);
             return {
                 id: ++nextId, kind, size, side, lane, length, direction, heading, entry, bornAt: time,
+                tone: Math.random() < 0.5 ? 'original' : 'pale',
                 entered: still,
                 phase: random(0, Math.PI * 2),
                 waveRate: random(1.2, 2.0),
@@ -2292,7 +2312,7 @@
             const right = Math.min(Math.ceil(width / cellWidth), Math.ceil(bounds.right / cellWidth));
             const top = Math.max(0, Math.floor(bounds.top / cellHeight));
             const bottom = Math.min(Math.ceil(height / cellHeight), Math.ceil(bounds.bottom / cellHeight));
-            const ink = dark ? '151,178,204' : '60,86,112';
+            const ink = colors[shark.tone][dark ? 'dark' : 'light'];
             for (let row = top; row < bottom; row++) {
                 for (let col = left; col < right; col++) {
                     const x = col * cellWidth;
@@ -2367,7 +2387,7 @@
             lastFrame = 0;
             toggle.hidden = !wide.matches;
             toggle.setAttribute('aria-checked', String(enabled));
-            toggle.title = enabled ? 'Hide shark animation' : 'Show shark animation';
+            toggle.title = enabled ? "don't like the shark?" : 'YES SHARK';
             canvas.hidden = !wide.matches || !enabled;
             if (!wide.matches && document.activeElement === toggle) document.getElementById('theme-toggle').focus();
             if (active()) refresh(true);
