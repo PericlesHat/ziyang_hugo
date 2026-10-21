@@ -1916,10 +1916,10 @@
     (function () {
         'use strict';
 
-        // Classic silhouette, fin proportions, ASCII shading and articulated spine adapted from
+        // Species silhouettes, fin proportions, ASCII shading and articulated spine adapted from
         // stackedlol/ascii-sharks, c521e24a787e6d4cc460d4cf2b9815f25e4fe453:
         // https://github.com/stackedlol/ascii-sharks (src/renderer.ts and src/world.ts).
-        // This static-page adaptation adds vertical patrols, content avoidance and transparent masks.
+        // This adaptation adds randomized passages, content avoidance and transparent masks.
         const canvas = document.getElementById('ascii-ocean');
         const toggle = document.getElementById('ocean-toggle');
         const ctx = canvas.getContext('2d');
@@ -1934,6 +1934,15 @@
         const cellWidth = 6;
         const cellHeight = 8;
         const ramp = ':;t%SX8#@';
+        const shapes = {
+            classic: { pectoral: [0.15, 0.43, 0.55, 0.26], pelvic: [0.57, 0.65, 0.69, 0.085], caudal: 0.085, dorsal: [0.33, 0.47], eye: [0.10, 0.14], falcate: true },
+            hammerhead: { pectoral: [0.17, 0.40, 0.50, 0.22], pelvic: [0.56, 0.63, 0.67, 0.075], caudal: 0.11, dorsal: [0.28, 0.44], head: [0.17, 0.035, 0.09], falcate: true },
+            mako: { pectoral: [0.18, 0.40, 0.50, 0.21], pelvic: [0.58, 0.64, 0.68, 0.06], caudal: 0.13, dorsal: [0.34, 0.45], eye: [0.11, 0.15], falcate: true },
+            thresher: { pectoral: [0.12, 0.27, 0.36, 0.20], pelvic: [0.37, 0.41, 0.44, 0.045], caudal: 0, dorsal: [0.24, 0.32], eye: [0.05, 0.10], falcate: true },
+            nurse: { pectoral: [0.16, 0.34, 0.40, 0.17], pelvic: [0.45, 0.52, 0.55, 0.075], caudal: 0, dorsal: [0.50, 0.58], eye: [0.05, 0.075], falcate: false }
+        };
+        const kinds = Object.keys(shapes);
+        const maxSharks = 2;
         const protectedElements = Array.from(document.querySelectorAll(
             '#profile_picture, #full_name, .affiliations, .socials, .introduction p, ' +
             '#education-experience > div, .news, .publication, .section-title, footer'
@@ -1952,6 +1961,11 @@
         let readingColumn = { left: 0, right: 0 };
         let obstacles = [];
         let sharks = [];
+        let lanes = [];
+        let sceneReady = false;
+        let nextSpawnAt = 0;
+        let nextId = 0;
+        let lastKind = null;
 
         try {
             enabled = localStorage.getItem(storageKey) !== 'off';
@@ -1960,6 +1974,7 @@
         }
 
         const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+        const random = (low, high) => low + Math.random() * (high - low);
         const smoothstep = (low, high, value) => {
             const t = clamp((value - low) / (high - low), 0, 1);
             return t * t * (3 - 2 * t);
@@ -1977,16 +1992,40 @@
             };
         }
 
-        function makeShark(side, lane, index) {
-            const length = clamp((lane.right - lane.left) * 0.95, 160, 240);
-            const direction = index ? -1 : 1;
-            const heading = direction * Math.PI / 2;
-            const x = (lane.left + lane.right) / 2;
-            const y = height * (index ? 0.72 : 0.30);
+        function sharkLength(lane, size) {
+            return 120 + size * (clamp((lane.right - lane.left) * 1.1, 180, 300) - 120);
+        }
+
+        function makeShark(still = false) {
+            let side = Math.random() < 0.5 ? -1 : 1;
+            if (sharks.length === 1 && Math.random() < 0.8) side = -sharks[0].side;
+            const lane = lanes[side < 0 ? 0 : 1];
+            const candidates = kinds.filter(kind => kind !== lastKind && !sharks.some(shark => shark.kind === kind));
+            const kind = candidates[Math.floor(Math.random() * candidates.length)];
+            lastKind = kind;
+            const size = Math.random();
+            const length = sharkLength(lane, size);
+            const entry = Math.random() < 0.30 ? 'outer' : (Math.random() < 0.5 ? 'top' : 'bottom');
+            const direction = entry === 'top' ? 1 : entry === 'bottom' ? -1 : (Math.random() < 0.5 ? 1 : -1);
+            let heading = direction * Math.PI / 2 + random(-0.18, 0.18);
+            let x = lane.left + random(0.18, 0.82) * (lane.right - lane.left);
+            let y = direction > 0 ? -length * 0.06 - 8 : height + length * 0.06 + 8;
+            if (entry === 'outer' && !still) {
+                x = side < 0 ? -length * 0.35 - 8 : width + length * 0.35 + 8;
+                y = random(0.18, 0.82) * height;
+                heading = direction * Math.PI / 2 + side * direction * random(0.45, 0.80);
+            }
+            if (still) y = height * (direction > 0 ? random(0.45, 0.82) : random(0.18, 0.55));
+            const speed = random(18, 30);
             return {
-                side, lane, length, direction, heading,
-                phase: index * Math.PI,
-                speed: 18 + length * 0.025,
+                id: ++nextId, kind, size, side, lane, length, direction, heading, entry, bornAt: time,
+                entered: still,
+                phase: random(0, Math.PI * 2),
+                waveRate: random(1.2, 2.0),
+                waveSize: random(0.025, 0.045),
+                speed, targetSpeed: speed,
+                course: random(0.15, 0.85),
+                nextCourseAt: time + random(3, 8),
                 nodes: Array.from({ length: nodeCount }, (_, i) => ({
                     x: x - Math.cos(heading) * length * i / (nodeCount - 1),
                     y: y - Math.sin(heading) * length * i / (nodeCount - 1)
@@ -1994,7 +2033,34 @@
             };
         }
 
+        function fullyOutside(shark) {
+            const reach = shark.length * 0.35 + 8;
+            return shark.nodes.every(node => node.x + reach < 0) ||
+                shark.nodes.every(node => node.x - reach > width) ||
+                shark.nodes.every(node => node.y + reach < 0) ||
+                shark.nodes.every(node => node.y - reach > height);
+        }
+
+        function updatePopulation() {
+            const remaining = sharks.filter(shark => {
+                const reach = shark.length * 0.35 + 8;
+                const passedExit = shark.direction > 0
+                    ? shark.nodes.every(node => node.y - reach > height)
+                    : shark.nodes.every(node => node.y + reach < 0);
+                return !(fullyOutside(shark) && (shark.entered || passedExit));
+            });
+            if (remaining.length !== sharks.length) {
+                sharks = remaining;
+                nextSpawnAt = Math.max(nextSpawnAt, time + random(1.5, 4.5));
+            }
+            if (sharks.length < maxSharks && time >= nextSpawnAt) {
+                sharks.push(makeShark());
+                nextSpawnAt = time + random(2, 5);
+            }
+        }
+
         function measure() {
+            const previousHeight = height;
             const nextWidth = document.documentElement.clientWidth;
             const nextHeight = window.innerHeight;
             const nextDpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -2015,14 +2081,33 @@
                 left: content.left + window.scrollX - padding,
                 right: content.right + window.scrollX + padding
             };
-            const lanes = [
+            lanes = [
                 { left: 12, right: content.left - padding },
                 { left: content.right + padding, right: width - 12 }
             ];
-            if (resized || !sharks.length) {
-                sharks = lanes.map((lane, index) => makeShark(index ? 1 : -1, lane, index));
-            } else {
-                sharks.forEach((shark, index) => { shark.lane = lanes[index]; });
+            // Resize the existing scene without replacing its individuals or restarting their paths.
+            for (const shark of sharks) {
+                const lane = lanes[shark.side < 0 ? 0 : 1];
+                if (resized) {
+                    const head = { ...shark.nodes[0] };
+                    const fraction = (head.x - shark.lane.left) / (shark.lane.right - shark.lane.left);
+                    const x = lane.left + fraction * (lane.right - lane.left);
+                    const y = previousHeight ? head.y * height / previousHeight : head.y;
+                    const length = sharkLength(lane, shark.size);
+                    const scale = length / shark.length;
+                    shark.nodes.forEach(node => {
+                        node.x = x + (node.x - head.x) * scale;
+                        node.y = y + (node.y - head.y) * scale;
+                    });
+                    shark.length = length;
+                }
+                shark.lane = lane;
+            }
+            if (!sceneReady) {
+                sceneReady = true;
+                if (reduced.matches) {
+                    while (sharks.length < maxSharks) sharks.push(makeShark(true));
+                }
             }
             layoutDirty = false;
         }
@@ -2040,15 +2125,23 @@
             const nodes = shark.nodes;
             const head = nodes[0];
             const length = shark.length;
-            // Reverse only after the entire body and fins have left the viewport.
-            if (shark.direction < 0 && nodes.every(node => node.y < -length * 0.35)) shark.direction = 1;
-            if (shark.direction > 0 && nodes.every(node => node.y > height + length * 0.35)) shark.direction = -1;
-
-            const center = (shark.lane.left + shark.lane.right) / 2;
-            const sway = Math.sin(time * 0.13 + shark.side) * Math.min(18, (shark.lane.right - shark.lane.left) * 0.07);
-            let dx = clamp((center + sway - head.x) / (length * 0.7), -0.7, 0.7);
+            if (time >= shark.nextCourseAt) {
+                shark.course = random(0.12, 0.88);
+                shark.targetSpeed = random(18, 30);
+                shark.nextCourseAt = time + random(3, 8);
+            }
+            const targetX = shark.lane.left + shark.course * (shark.lane.right - shark.lane.left);
+            let dx = clamp((targetX - head.x) / (length * 0.6), -0.9, 0.9);
             const dy = shark.direction;
             const lookAhead = length * 1.4;
+
+            for (const other of sharks) {
+                if (other === shark) continue;
+                const separation = head.x - other.nodes[0].x;
+                const distance = Math.hypot(separation, head.y - other.nodes[0].y);
+                const range = (length + other.length) * 0.5;
+                if (distance < range) dx += (Math.sign(separation) || (shark.id > other.id ? 1 : -1)) * (1 - distance / range) * 0.6;
+            }
 
             // Probe the complete articulated body, with extra clearance at the pectoral fins.
             // When a corner control blocks a lane, steering can briefly lead off-screen.
@@ -2071,7 +2164,8 @@
             const difference = Math.atan2(Math.sin(desired - shark.heading), Math.cos(desired - shark.heading));
             const maxTurn = Math.min(0.65, shark.speed / (length * 0.28)) * dt;
             shark.heading += clamp(difference, -maxTurn, maxTurn);
-            shark.phase += dt * 1.7;
+            shark.speed += (shark.targetSpeed - shark.speed) * Math.min(1, dt * 0.4);
+            shark.phase += dt * shark.waveRate;
             head.x += Math.cos(shark.heading) * shark.speed * dt;
             head.y += Math.sin(shark.heading) * shark.speed * dt;
 
@@ -2087,9 +2181,36 @@
                 nodes[i].y = previous.y + Math.sin(angle) * segment;
                 previousAngle = angle;
             }
+            if (head.x >= 0 && head.x <= width && head.y >= 0 && head.y <= height) shark.entered = true;
         }
 
-        function bodyWidth(s) {
+        function bodyWidth(s, kind) {
+            if (kind === 'hammerhead') {
+                if (s < 0.06) return 0.045;
+                if (s < 0.30) return 0.045 + 0.061 * smoothstep(0.06, 0.30, s);
+                return bodyWidth(s, 'classic') * 0.92;
+            }
+            if (kind === 'mako') {
+                if (s < 0.17) return 0.088 * Math.pow(Math.sin(s / 0.17 * Math.PI / 2), 1.5);
+                if (s < 0.32) return 0.088 + 0.012 * smoothstep(0.17, 0.32, s);
+                if (s < 0.86) return 0.014 + 0.086 * Math.pow(1 - (s - 0.32) / 0.54, 1.45);
+                const k = (s - 0.86) / 0.14;
+                return 0.014 * (1 - k) + 0.01 * Math.sin(k * Math.PI);
+            }
+            if (kind === 'thresher') {
+                if (s < 0.08) return 0.07 * Math.pow(Math.sin(s / 0.08 * Math.PI / 2), 0.75);
+                if (s < 0.20) return 0.07 + 0.02 * smoothstep(0.08, 0.20, s);
+                if (s < 0.48) return 0.012 + 0.078 * Math.pow(1 - (s - 0.20) / 0.28, 1.3);
+                const k = (s - 0.48) / 0.52;
+                return 0.012 * (1 - k) + 0.006 * Math.sin(k * Math.PI * 0.9) + 0.002;
+            }
+            if (kind === 'nurse') {
+                if (s < 0.08) return 0.085 * Math.pow(Math.sin(s / 0.08 * Math.PI / 2), 0.4);
+                if (s < 0.30) return 0.085 + 0.02 * smoothstep(0.08, 0.30, s);
+                if (s < 0.72) return 0.022 + 0.083 * Math.pow(1 - (s - 0.30) / 0.42, 1.1);
+                const k = (s - 0.72) / 0.28;
+                return 0.022 * (1 - k * k) + 0.014 * Math.sin(k * Math.PI);
+            }
             if (s < 0.13) return 0.09 * Math.pow(Math.sin(s / 0.13 * Math.PI / 2), 0.95);
             if (s < 0.30) return 0.09 + 0.016 * smoothstep(0.13, 0.30, s);
             if (s < 0.84) return 0.019 + 0.087 * Math.pow(1 - (s - 0.30) / 0.54, 1.25);
@@ -2104,7 +2225,9 @@
             return !((a < 0 || b < 0 || c < 0) && (a > 0 || b > 0 || c > 0));
         }
 
-        function sample(x, y, spine, length) {
+        function sample(x, y, spine, shark) {
+            const length = shark.length;
+            const shape = shapes[shark.kind];
             let best = Infinity;
             let along = 0;
             for (let i = 0; i < nodeCount - 1; i++) {
@@ -2120,20 +2243,29 @@
                 }
             }
             const across = Math.sqrt(best) / length;
-            const halfWidth = bodyWidth(along);
+            if (shape.head) {
+                const [span, sweep, depth] = shape.head;
+                const ratio = across / span;
+                const front = sweep * ratio * ratio;
+                if (ratio <= 1 && along >= front && along <= front + depth * (1 - 0.2 * ratio ** 4)) {
+                    return { shade: 0.62 - 0.2 * ratio, glyph: ratio > 0.84 ? 'o' : 'S' };
+                }
+            }
+            const halfWidth = bodyWidth(along, shark.kind);
             if (across <= halfWidth) {
                 const edge = across / (halfWidth || 1);
-                if (along > 0.10 && along < 0.14 && edge > 0.65) return { shade: 0.85, glyph: 'o' };
-                if (along > 0.33 && along < 0.47 && edge < 0.30) return { shade: 0.85, glyph: '@' };
+                if (shape.eye && along > shape.eye[0] && along < shape.eye[1] && edge > 0.65) return { shade: 0.85, glyph: 'o' };
+                if (along > shape.dorsal[0] && along < shape.dorsal[1] && edge < 0.30) return { shade: 0.85, glyph: '@' };
                 const shade = 0.70 - edge * edge * 0.43;
                 const index = Math.floor(clamp((1 - shade) * 9 + Math.sin(along * 120) * 0.5, 0, ramp.length - 1));
                 return { shade, glyph: ramp[index] };
             }
-            // Classic swept pectoral fins, smaller pelvic fins and forked tail.
-            const pectoral = inTriangle(along, across, 0.15, 0, 0.43, 0, 0.55, 0.26) &&
-                !inTriangle(along, across, 0.43, 0, 0.4696, 0.143, 0.55, 0.26);
-            const pelvic = inTriangle(along, across, 0.57, 0, 0.65, 0, 0.69, 0.085);
-            const tail = inTriangle(along, across, 0.86, 0, 0.95, 0, 1, 0.085);
+            const [p0, p1, p2, reach] = shape.pectoral;
+            const [v0, v1, v2, pelvicReach] = shape.pelvic;
+            const pectoral = inTriangle(along, across, p0, 0, p1, 0, p2, reach) &&
+                !(shape.falcate && inTriangle(along, across, p1, 0, p1 + (p2 - p1) * 0.33, reach * 0.55, p2, reach));
+            const pelvic = inTriangle(along, across, v0, 0, v1, 0, v2, pelvicReach);
+            const tail = shape.caudal > 0 && inTriangle(along, across, 0.86, 0, 0.95, 0, 1, shape.caudal);
             return pectoral || pelvic || tail ? { shade: 0.38, glyph: '%;t'[(Math.floor(along * 50)) % 3] } : null;
         }
 
@@ -2146,7 +2278,7 @@
                 const ty = before.y - after.y;
                 const norm = Math.hypot(tx, ty) || 1;
                 const s = i / (nodeCount - 1);
-                const wave = length * 0.035 * (0.1 + 0.9 * Math.pow(s, 1.8)) * Math.sin(shark.phase - s * 5.2);
+                const wave = length * shark.waveSize * (0.1 + 0.9 * Math.pow(s, 1.8)) * Math.sin(shark.phase - s * 5.2);
                 return { x: node.x - ty / norm * wave, y: node.y + tx / norm * wave };
             });
             const reach = length * 0.30;
@@ -2159,7 +2291,7 @@
                 for (let col = left; col < right; col++) {
                     const x = col * cellWidth;
                     const y = row * cellHeight;
-                    const hit = sample(x + cellWidth / 2, y + cellHeight / 2, spine, length);
+                    const hit = sample(x + cellWidth / 2, y + cellHeight / 2, spine, shark);
                     if (!hit) continue;
                     ctx.fillStyle = 'rgba(' + ink + ',' + (0.05 + hit.shade * 0.10) + ')';
                     ctx.fillRect(x + 0.5, y + 0.5, cellWidth - 1, cellHeight - 1);
@@ -2207,6 +2339,7 @@
                 if (!reduced.matches) {
                     const dt = lastFrame ? Math.min((now - lastFrame) / 1000, 0.08) : 1 / 30;
                     time += dt;
+                    updatePopulation();
                     sharks.forEach(shark => advance(shark, dt));
                 }
                 render();
