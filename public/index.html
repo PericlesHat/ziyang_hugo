@@ -1949,6 +1949,7 @@
         let redraw = true;
         let documentRects = [];
         let fixedRects = [];
+        let readingColumn = { left: 0, right: 0 };
         let obstacles = [];
         let sharks = [];
 
@@ -2010,6 +2011,10 @@
                 .map(element => expandedRect(element, true)).filter(Boolean);
 
             const content = document.body.getBoundingClientRect();
+            readingColumn = {
+                left: content.left + window.scrollX - padding,
+                right: content.right + window.scrollX + padding
+            };
             const lanes = [
                 { left: 12, right: content.left - padding },
                 { left: content.right + padding, right: width - 12 }
@@ -2173,6 +2178,11 @@
             const dark = document.documentElement.dataset.theme === 'dark';
             sharks.forEach(shark => drawShark(shark, dark));
 
+            // Keep the reading column clear for its full height, including between scroll frames.
+            const readingLeft = Math.floor((readingColumn.left - window.scrollX) * dpr) / dpr;
+            const readingRight = Math.ceil((readingColumn.right - window.scrollX) * dpr) / dpr;
+            ctx.clearRect(readingLeft, 0, readingRight - readingLeft, height);
+
             // Final hard mask protects text even during resize, scrolling and wide turns.
             obstacles.forEach(rect => {
                 const left = Math.floor(rect.left * dpr) / dpr;
@@ -2191,8 +2201,8 @@
         function tick(now) {
             raf = 0;
             if (!active()) return;
-            if (layoutDirty) measure();
             if (now - lastFrame >= frameInterval || !lastFrame) {
+                if (layoutDirty) measure();
                 projectObstacles();
                 if (!reduced.matches) {
                     const dt = lastFrame ? Math.min((now - lastFrame) / 1000, 0.08) : 1 / 30;
@@ -2208,8 +2218,7 @@
         function refresh(measureLayout) {
             layoutDirty = layoutDirty || measureLayout;
             redraw = true;
-            // Erase the old frame before moving document content can pass behind it.
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Retain the completed frame until its replacement is ready; wheel events must not erase it.
             requestTick();
         }
 
