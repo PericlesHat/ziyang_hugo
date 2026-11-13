@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ziyang-emory.vercel.app/sitemap.xml

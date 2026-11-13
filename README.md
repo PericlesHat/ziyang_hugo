@@ -31,8 +31,9 @@ Visit `http://localhost:8000/`. No package installation or build is needed.
 
 ## Writing
 
-The homepage links to `/blog/`, which lists the current essays. The research
-protocol essay lives at `/blog/the-paper-is-just-a-view/` and includes its own
+The homepage book icon beside the shark control links directly to the essay.
+`/blog/` lists the current essays. The research protocol essay lives at
+`/blog/the-paper-is-just-a-view/` and includes its own
 four transparent illustrations. Older template post URLs are preserved, but
 they are not promoted in the new writing index.
 
