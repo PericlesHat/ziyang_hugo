@@ -28,3 +28,26 @@ python -m http.server 8000 --directory public
 ```
 
 Visit `http://localhost:8000/`. No package installation or build is needed.
+
+## Writing
+
+The homepage links to `/blog/`, which lists the current essays. The research
+protocol essay lives at `/blog/the-paper-is-just-a-view/` and includes its own
+four transparent illustrations. Older template post URLs are preserved, but
+they are not promoted in the new writing index.
+
+The editable article source is `writing/the-paper-is-just-a-view.md`, exported
+from the companion draft Page. Page edits are not synchronized automatically.
+After updating the source, regenerate the two static writing pages locally:
+
+```sh
+python -m pip install Markdown
+python scripts/build-writing.py
+```
+
+Only the local authoring command needs Python Markdown. Vercel still serves
+the committed `public/` files with no install or build command. Writing pages
+use the homepage's color palette and follow the system theme on fresh visits;
+manual theme changes are temporary and are not saved to browser storage.
+The generated sitemap lists the real homepage, writing index and essay; the
+old example-domain/template entries are not included.
